@@ -1,4 +1,5 @@
 import {
+  filter,
   combineLatest,
   concatMap,
   Observable,
@@ -237,6 +238,12 @@ export class DefaultSdkService implements SdkService {
         connector: () => new ReplaySubject(1),
         resetOnRefCountZero: () => timer(1000),
       }),
+      // The ReplaySubject(1) above can hold a stale Rc after switchMap tears down
+      // the inner observable (which calls markForDisposal on the previous Rc) and
+      // before the next inner emits a fresh Rc. Subscribers in that window would
+      // otherwise receive the marked Rc, call take(), and throw. Drop those
+      // emissions; subscribers will receive the next valid emission instead.
+      filter((rc): rc is Rc<PasswordManagerClient> | undefined => rc === undefined || !rc.markedForDisposal),
     );
 
     this.sdkClientCache.set(userId, client$);

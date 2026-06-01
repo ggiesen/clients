@@ -1,4 +1,5 @@
 import {
+  filter,
   combineLatest,
   concatMap,
   Observable,
@@ -171,6 +172,10 @@ export class DefaultRegisterSdkService implements RegisterSdkService {
       }),
       tap({ finalize: () => this.sdkClientCache.delete(userId) }),
       shareReplay({ refCount: true, bufferSize: 1 }),
+      // shareReplay buffer can hold a stale Rc after switchMap tears down inner
+      // (markForDisposal) before next inner emits a fresh one. Drop marked Rcs;
+      // subscribers receive the next valid emission. Same race as default-sdk.
+      filter((rc): rc is Rc<PasswordManagerClient> | undefined => rc === undefined || !rc.markedForDisposal),
     );
 
     this.sdkClientCache.set(userId, client$);

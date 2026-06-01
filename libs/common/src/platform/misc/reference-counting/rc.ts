@@ -8,12 +8,22 @@ export type Freeable = { free: () => void };
  * freed of at a specific time but might still be in-use when that happens.
  */
 export class Rc<T extends Freeable> {
-  private markedForDisposal = false;
+  private _markedForDisposal = false;
   private refCount = 0;
   private value: T;
 
   constructor(value: T) {
     this.value = value;
+  }
+
+  /**
+   * Whether this Rc has been marked for disposal. Once true, {@link take} will throw.
+   * Exposed so that sources sharing an Rc via a buffered subject (e.g. ReplaySubject)
+   * can filter out emissions whose Rc has been marked between buffer time and replay,
+   * avoiding races where late subscribers receive a no-longer-takeable Rc.
+   */
+  get markedForDisposal(): boolean {
+    return this._markedForDisposal;
   }
 
   /**
@@ -35,7 +45,7 @@ export class Rc<T extends Freeable> {
    * @returns The value.
    */
   take(): Ref<T> {
-    if (this.markedForDisposal) {
+    if (this._markedForDisposal) {
       throw new Error("Cannot take a reference to a value marked for disposal");
     }
 
@@ -48,7 +58,7 @@ export class Rc<T extends Freeable> {
    * will be freed.
    */
   markForDisposal() {
-    this.markedForDisposal = true;
+    this._markedForDisposal = true;
     this.freeIfPossible();
   }
 
@@ -58,7 +68,7 @@ export class Rc<T extends Freeable> {
   }
 
   private freeIfPossible() {
-    if (this.refCount === 0 && this.markedForDisposal) {
+    if (this.refCount === 0 && this._markedForDisposal) {
       this.value.free();
     }
   }
